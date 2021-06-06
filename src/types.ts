@@ -6,6 +6,16 @@ export interface SimpleOptions {
   seriesCountSize: SeriesSize;
 }
 
+interface SetupValue {
+  model: string[];
+  week: any[];
+}
+
+export interface Setup {
+  key: string;
+  value: SetupValue;
+}
+
 export interface ProductionOptions {
   showSeriesCount: boolean;
   seriesCountSize: SeriesSize;
