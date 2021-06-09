@@ -1,34 +1,77 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { PanelProps } from '@grafana/data';
+import { dateTime, GrafanaTheme, PanelProps, TimeRange } from '@grafana/data';
 import { BackendSrv, getBackendSrv } from '@grafana/runtime';
-import { ProductionOptions, Setup } from 'types';
 import { css, cx } from 'emotion';
-import { stylesFactory /*, useTheme */ } from '@grafana/ui';
+import { IconButton, stylesFactory, useTheme } from '@grafana/ui';
+
+import { DayValues, gspTimeRange, ProductionOptions, Setup } from 'types';
 
 interface Props extends PanelProps<ProductionOptions> {}
 
-export const ProductionPanel: React.FC<Props> = ({
-  options,
-  data,
-  timeRange,
-  width,
-  height,
-  onChangeTimeRange,
-}: Props) => {
+export const ProductionPanel: React.FC<Props> = ({ timeRange, width, height, onChangeTimeRange }: Props) => {
+  const firstInit = useRef<boolean>(false);
   const openingTimeSetup = useRef<Setup>();
-  // const theme = useTheme();
-  const styles = getStyles();
+  const theme = useTheme();
+  const styles = getStyles(theme);
   const gspLoopback: BackendSrv = getBackendSrv();
   let validSetup = useRef(false);
   let [week, setWeek] = useState<any[]>([]);
+  let [selectedDateInRange, setSelectedDateInRange] = useState<string>(new Date().toDateString());
+
+  const getMinutesFromGspPeriod = (period: string): number => {
+    const tmp = period.split(':');
+    return Number(tmp[0]) * 60 + Number(tmp[1]);
+  };
+
+  const parseSetupPeriods = (day: Date, setup: DayValues): TimeRange => {
+    const from = new Date(day);
+    const to = new Date(day);
+    let parsedPeriodFrom = [0, 0]; // [ heures, minutes ]
+    let parsedPeriodTo = [0, 0]; // [ heures, minutes ]
+
+    // pas de période de production définie, abandon
+    if (setup.periods.length <= 0) {
+      return timeRange;
+    }
+
+    switch (setup.periods.length) {
+      case 1:
+        // on ne traite qu'avec un seul index
+        parsedPeriodFrom = setup.periods[0].start.split(':').map((t: string) => Number(t));
+        parsedPeriodTo = setup.periods[0].end.split(':').map((t: string) => Number(t));
+        break;
+
+      default:
+        // on réalise une copie du tableau
+        const tmp: gspTimeRange[] = [];
+        for (let p of setup.periods) {
+          tmp.push({ ...p });
+        }
+        // on trie du start le plus petit a start le plus grand et on ne conserve que le premier élément
+        tmp.sort((a, b) => getMinutesFromGspPeriod(a.start) - getMinutesFromGspPeriod(b.start));
+        parsedPeriodFrom = tmp[0].start.split(':').map((t: string) => Number(t));
+        // on trie du end le plus grand a end le plus petit et on ne conserve que le premier élément
+        tmp.sort((a, b) => getMinutesFromGspPeriod(b.end) - getMinutesFromGspPeriod(a.end));
+        parsedPeriodTo = tmp[0].end.split(':').map((t: string) => Number(t));
+        break;
+    }
+    from.setHours(parsedPeriodFrom[0], parsedPeriodFrom[1], 0, 0);
+    to.setHours(parsedPeriodTo[0], parsedPeriodTo[1], 0, 0);
+    return { from: dateTime(from), to: dateTime(to), raw: { from: from.toLocaleString(), to: to.toLocaleString() } };
+  };
+
+  const setTimePeriod = (day: Date, setup: DayValues) => {
+    const { from, to } = parseSetupPeriods(day, setup);
+    onChangeTimeRange({ from: from.valueOf(), to: to.valueOf() });
+  };
 
   const refreshWeek = (day: Date) => {
+    // le paramètre day est toujours le dernier jour de la semaine
     if (!openingTimeSetup.current) {
       return;
     }
     const lastDay = day.getDay();
     const openingTimeSetupLastIndex = openingTimeSetup.current.value.week.findIndex((d) => d.weekDay === lastDay);
-    console.log(openingTimeSetupLastIndex);
     if (openingTimeSetupLastIndex < 0) {
       return;
     }
@@ -43,6 +86,14 @@ export const ProductionPanel: React.FC<Props> = ({
       });
     }
     setWeek(tmp);
+    if (!firstInit.current) {
+      let e = new Date();
+      const i = tmp.findIndex((day) => day.setup.weekDay === e.getDay());
+      if (i >= 0) {
+        setTimePeriod(tmp[i].day, tmp[i].setup);
+      }
+      firstInit.current = true;
+    }
   };
 
   useEffect(() => {
@@ -55,9 +106,16 @@ export const ProductionPanel: React.FC<Props> = ({
       if (!validSetup.current) {
         return;
       }
-      refreshWeek(new Date());
+      // get next sunday date (sunday.getDay() = 0)
+      const nextSunday = new Date();
+      nextSunday.setDate(nextSunday.getDate() + 7 - nextSunday.getDay());
+      refreshWeek(nextSunday);
     });
   }, []);
+
+  useEffect(() => {
+    setSelectedDateInRange(new Date(Date.parse(timeRange.from.toString())).toDateString());
+  }, [timeRange]);
 
   return (
     <div
@@ -69,16 +127,61 @@ export const ProductionPanel: React.FC<Props> = ({
         `
       )}
     >
-      {validSetup.current ? <p>ok</p> : <p>nok</p>}
-      {JSON.stringify(week, null, 2)}
+      <IconButton
+        name="arrow-left"
+        size="xxl"
+        disabled={week.length <= 0}
+        onClick={() => {
+          const lastWeekDay = week[week.length - 1].day;
+          lastWeekDay.setDate(lastWeekDay.getDate() - 7);
+          refreshWeek(lastWeekDay);
+        }}
+      />
+      {validSetup &&
+        week.map((day) => (
+          <div
+            key={day.day.toString()}
+            className={cx(styles.cardContent, {
+              [css`
+                border-bottom: 1px solid ${theme.palette.queryOrange};
+              `]: day.day.toDateString() === new Date().toDateString(),
+              [css`
+                display: none;
+              `]: day.setup.periods.length <= 0,
+              [css`
+                border: 1px solid ${theme.palette.queryGreen};
+              `]: day.day.toDateString() === selectedDateInRange,
+            })}
+            onClick={() => {
+              setTimePeriod(day.day, day.setup);
+            }}
+          >
+            <h3>{day.setup.day}</h3>
+            <p>{day.day.toLocaleDateString()}</p>
+          </div>
+        ))}
+      <IconButton
+        name="arrow-right"
+        size="xxl"
+        disabled={week.length <= 0 || (week.length > 0 && week[week.length - 1].day >= new Date())}
+        onClick={() => {
+          const lastWeekDay = week[week.length - 1].day;
+          lastWeekDay.setDate(lastWeekDay.getDate() + 7);
+          refreshWeek(lastWeekDay);
+        }}
+      />
     </div>
   );
 };
 
-const getStyles = stylesFactory(() => {
+const getStyles = stylesFactory((theme: GrafanaTheme) => {
   return {
     wrapper: css`
       position: relative;
+      display: flex;
+      flex-flow: row nowrap;
+      justify-content: space-between;
+      align-items: stretch;
     `,
     svg: css`
       position: absolute;
@@ -91,5 +194,73 @@ const getStyles = stylesFactory(() => {
       left: 0;
       padding: 10px;
     `,
+    cardContent: css`
+      flex: 1 1 auto;
+      display: flex;
+      flex-flow: column nowrap;
+      justify-content: start;
+      align-items: center;
+    `,
+    today: css``,
   };
 });
+
+// For Grafana versions older than 7.3.0.
+export const legacyClassicColors = [
+  '#7EB26D', // 0: pale green
+  '#EAB839', // 1: mustard
+  '#6ED0E0', // 2: light blue
+  '#EF843C', // 3: orange
+  '#E24D42', // 4: red
+  '#1F78C1', // 5: ocean
+  '#BA43A9', // 6: purple
+  '#705DA0', // 7: violet
+  '#508642', // 8: dark green
+  '#CCA300', // 9: dark sand
+  '#447EBC',
+  '#C15C17',
+  '#890F02',
+  '#0A437C',
+  '#6D1F62',
+  '#584477',
+  '#B7DBAB',
+  '#F4D598',
+  '#70DBED',
+  '#F9BA8F',
+  '#F29191',
+  '#82B5D8',
+  '#E5A8E2',
+  '#AEA2E0',
+  '#629E51',
+  '#E5AC0E',
+  '#64B0C8',
+  '#E0752D',
+  '#BF1B00',
+  '#0A50A1',
+  '#962D82',
+  '#614D93',
+  '#9AC48A',
+  '#F2C96D',
+  '#65C5DB',
+  '#F9934E',
+  '#EA6460',
+  '#5195CE',
+  '#D683CE',
+  '#806EB7',
+  '#3F6833',
+  '#967302',
+  '#2F575E',
+  '#99440A',
+  '#58140C',
+  '#052B51',
+  '#511749',
+  '#3F2B5B',
+  '#E0F9D7',
+  '#FCEACA',
+  '#CFFAFF',
+  '#F9E2D2',
+  '#FCE2DE',
+  '#BADFF4',
+  '#F9D9F9',
+  '#DEDAF7',
+];

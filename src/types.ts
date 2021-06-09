@@ -1,14 +1,17 @@
-type SeriesSize = 'sm' | 'md' | 'lg';
+export interface GspTimeRange {
+  start: string;
+  end: string;
+}
 
-export interface SimpleOptions {
-  text: string;
-  showSeriesCount: boolean;
-  seriesCountSize: SeriesSize;
+export interface DayValues {
+  day: string;
+  periods: GspTimeRange[];
+  weekDay: number;
 }
 
 interface SetupValue {
   model: string[];
-  week: any[];
+  week: DayValues[];
 }
 
 export interface Setup {
@@ -16,7 +19,4 @@ export interface Setup {
   value: SetupValue;
 }
 
-export interface ProductionOptions {
-  showSeriesCount: boolean;
-  seriesCountSize: SeriesSize;
-}
+export interface ProductionOptions {}
