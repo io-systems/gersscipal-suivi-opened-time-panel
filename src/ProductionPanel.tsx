@@ -4,7 +4,7 @@ import { BackendSrv, getBackendSrv } from '@grafana/runtime';
 import { css, cx } from 'emotion';
 import { IconButton, stylesFactory, useTheme } from '@grafana/ui';
 
-import { DayValues, gspTimeRange, ProductionOptions, Setup } from 'types';
+import { DayValues, GspTimeRange, ProductionOptions, Setup } from 'types';
 
 interface Props extends PanelProps<ProductionOptions> {}
 
@@ -13,7 +13,7 @@ export const ProductionPanel: React.FC<Props> = ({ timeRange, width, height, onC
   const openingTimeSetup = useRef<Setup>();
   const theme = useTheme();
   const styles = getStyles(theme);
-  const gspLoopback: BackendSrv = getBackendSrv();
+  const GspLoopback: BackendSrv = getBackendSrv();
   let validSetup = useRef(false);
   let [week, setWeek] = useState<any[]>([]);
   let [selectedDateInRange, setSelectedDateInRange] = useState<string>(new Date().toDateString());
@@ -43,7 +43,7 @@ export const ProductionPanel: React.FC<Props> = ({ timeRange, width, height, onC
 
       default:
         // on réalise une copie du tableau
-        const tmp: gspTimeRange[] = [];
+        const tmp: GspTimeRange[] = [];
         for (let p of setup.periods) {
           tmp.push({ ...p });
         }
@@ -98,7 +98,7 @@ export const ProductionPanel: React.FC<Props> = ({ timeRange, width, height, onC
 
   useEffect(() => {
     const url = [window.location.protocol, '//', window.location.hostname, ':', '3000'].join('');
-    gspLoopback.get(`${url}/app-setup/opening-time-setup`).then((data: Setup) => {
+    GspLoopback.get(`${url}/app-setup/opening-time-setup`).then((data: Setup) => {
       openingTimeSetup.current = data;
       const setupError =
         !data || !data.value || !data.value.week || !Array.isArray(data.value.week) || data.value.week.length <= 0;
