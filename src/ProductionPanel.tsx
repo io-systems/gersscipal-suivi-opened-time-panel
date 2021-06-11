@@ -8,9 +8,11 @@ import { DayValues, GspTimeRange, ProductionOptions, Setup } from 'types';
 
 interface Props extends PanelProps<ProductionOptions> {}
 
-export const ProductionPanel: React.FC<Props> = ({ timeRange, width, height, onChangeTimeRange }: Props) => {
+export const ProductionPanel: React.FC<Props> = ({ options, timeRange, width, height, onChangeTimeRange }: Props) => {
   const firstInit = useRef<boolean>(false);
   const openingTimeSetup = useRef<Setup>();
+  const lastTimeRange = useRef<string>();
+  const refreshInterval = useRef<NodeJS.Timeout>();
   const theme = useTheme();
   const styles = getStyles(theme);
   const GspLoopback: BackendSrv = getBackendSrv();
@@ -24,8 +26,6 @@ export const ProductionPanel: React.FC<Props> = ({ timeRange, width, height, onC
   };
 
   const parseSetupPeriods = (day: Date, setup: DayValues): TimeRange => {
-    const from = new Date(day);
-    const to = new Date(day);
     let parsedPeriodFrom = [0, 0]; // [ heures, minutes ]
     let parsedPeriodTo = [0, 0]; // [ heures, minutes ]
 
@@ -50,19 +50,42 @@ export const ProductionPanel: React.FC<Props> = ({ timeRange, width, height, onC
         // on trie du start le plus petit a start le plus grand et on ne conserve que le premier élément
         tmp.sort((a, b) => getMinutesFromGspPeriod(a.start) - getMinutesFromGspPeriod(b.start));
         parsedPeriodFrom = tmp[0].start.split(':').map((t: string) => Number(t));
+
         // on trie du end le plus grand a end le plus petit et on ne conserve que le premier élément
         tmp.sort((a, b) => getMinutesFromGspPeriod(b.end) - getMinutesFromGspPeriod(a.end));
         parsedPeriodTo = tmp[0].end.split(':').map((t: string) => Number(t));
         break;
     }
+    const from = new Date(day);
+    const to = new Date(day);
+    const now = new Date();
+    const dayIsToday = from.toDateString() === now.toDateString();
     from.setHours(parsedPeriodFrom[0], parsedPeriodFrom[1], 0, 0);
     to.setHours(parsedPeriodTo[0], parsedPeriodTo[1], 0, 0);
+    if (dayIsToday && now.getTime() < to.getTime()) {
+      to.setHours(now.getHours(), now.getMinutes(), now.getSeconds(), 0);
+    }
     return { from: dateTime(from), to: dateTime(to), raw: { from: from.toLocaleString(), to: to.toLocaleString() } };
   };
 
   const setTimePeriod = (day: Date, setup: DayValues) => {
     const { from, to } = parseSetupPeriods(day, setup);
-    onChangeTimeRange({ from: from.valueOf(), to: to.valueOf() });
+    const newTimeRange = { from: from.valueOf(), to: to.valueOf() };
+    if (JSON.stringify(newTimeRange) !== lastTimeRange.current) {
+      onChangeTimeRange(newTimeRange);
+      lastTimeRange.current = JSON.stringify(newTimeRange);
+    }
+  };
+  const updateTodayTimePeriod = () => {
+    if (!week || week.length <= 0) {
+      return;
+    }
+    let e = new Date();
+    const weekDayIndex = week.findIndex((day) => day.setup.weekDay === e.getDay());
+    if (weekDayIndex < 0) {
+      return;
+    }
+    setTimePeriod(e, week[weekDayIndex].setup);
   };
 
   const refreshWeek = (day: Date) => {
@@ -114,8 +137,19 @@ export const ProductionPanel: React.FC<Props> = ({ timeRange, width, height, onC
   }, []);
 
   useEffect(() => {
+    if (refreshInterval.current) {
+      clearInterval(refreshInterval.current);
+    }
+    if (timeRange.from.toDate().toDateString() === new Date().toDateString()) {
+      updateTodayTimePeriod();
+      if (options.autoRefresh) {
+        refreshInterval.current = setInterval(() => {
+          updateTodayTimePeriod();
+        }, options.refreshSeconds * 1000);
+      }
+    }
     setSelectedDateInRange(new Date(Date.parse(timeRange.from.toString())).toDateString());
-  }, [timeRange]);
+  }, [timeRange, options.autoRefresh, options.refreshSeconds]);
 
   return (
     <div

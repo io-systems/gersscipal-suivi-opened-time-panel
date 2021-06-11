@@ -19,4 +19,7 @@ export interface Setup {
   value: SetupValue;
 }
 
-export interface ProductionOptions {}
+export interface ProductionOptions {
+  autoRefresh: boolean;
+  refreshSeconds: number;
+}
