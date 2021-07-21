@@ -147,7 +147,7 @@ export const ProductionPanel: React.FC<Props> = ({ options, timeRange, width, he
           updateTodayTimePeriod();
         }, options.refreshSeconds * 1000);
       }
-    }else{
+    } else {
       console.log('not today');
     }
     setSelectedDateInRange(timeRange.from.toDate().toDateString());
@@ -209,10 +209,9 @@ export const ProductionPanel: React.FC<Props> = ({ options, timeRange, width, he
         />
       </div>
     );
-  }
+  };
 
   return render();
-
 };
 
 const getStyles = stylesFactory((theme: GrafanaTheme) => {
