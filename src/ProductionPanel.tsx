@@ -147,65 +147,72 @@ export const ProductionPanel: React.FC<Props> = ({ options, timeRange, width, he
           updateTodayTimePeriod();
         }, options.refreshSeconds * 1000);
       }
+    }else{
+      console.log('not today');
     }
-    setSelectedDateInRange(new Date(Date.parse(timeRange.from.toString())).toDateString());
+    setSelectedDateInRange(timeRange.from.toDate().toDateString());
   }, [timeRange, options.autoRefresh, options.refreshSeconds]);
 
-  return (
-    <div
-      className={cx(
-        styles.wrapper,
-        css`
-          width: ${width}px;
-          height: ${height}px;
-        `
-      )}
-    >
-      <IconButton
-        name="arrow-left"
-        size="xxl"
-        disabled={week.length <= 0}
-        onClick={() => {
-          const lastWeekDay = week[week.length - 1].day;
-          lastWeekDay.setDate(lastWeekDay.getDate() - 7);
-          refreshWeek(lastWeekDay);
-        }}
-      />
-      {validSetup &&
-        week.map((day) => (
-          <div
-            key={day.day.toString()}
-            className={cx(styles.cardContent, {
-              [css`
-                border-bottom: 1px solid ${theme.palette.queryOrange};
-              `]: day.day.toDateString() === new Date().toDateString(),
-              [css`
-                display: none;
-              `]: day.setup.periods.length <= 0,
-              [css`
-                border: 1px solid ${theme.palette.queryGreen};
-              `]: day.day.toDateString() === selectedDateInRange,
-            })}
-            onClick={() => {
-              setTimePeriod(day.day, day.setup);
-            }}
-          >
-            <h3>{day.setup.day}</h3>
-            <p>{day.day.toLocaleDateString()}</p>
-          </div>
-        ))}
-      <IconButton
-        name="arrow-right"
-        size="xxl"
-        disabled={week.length <= 0 || (week.length > 0 && week[week.length - 1].day >= new Date())}
-        onClick={() => {
-          const lastWeekDay = week[week.length - 1].day;
-          lastWeekDay.setDate(lastWeekDay.getDate() + 7);
-          refreshWeek(lastWeekDay);
-        }}
-      />
-    </div>
-  );
+  const render = () => {
+    return (
+      <div
+        className={cx(
+          styles.wrapper,
+          css`
+            width: ${width}px;
+            height: ${height}px;
+          `
+        )}
+      >
+        <IconButton
+          name="arrow-left"
+          size="xxl"
+          disabled={week.length <= 0}
+          onClick={() => {
+            const lastWeekDay = week[week.length - 1].day;
+            lastWeekDay.setDate(lastWeekDay.getDate() - 7);
+            refreshWeek(lastWeekDay);
+          }}
+        />
+        {validSetup &&
+          week.map((day) => (
+            <div
+              key={day.day.toString()}
+              className={cx(styles.cardContent, {
+                [css`
+                  border-bottom: 1px solid ${theme.palette.queryOrange};
+                `]: day.day.toDateString() === new Date().toDateString(),
+                [css`
+                  display: none;
+                `]: day.setup.periods.length <= 0,
+                [css`
+                  border: 1px solid ${theme.palette.queryGreen};
+                `]: day.day.toDateString() === selectedDateInRange,
+              })}
+              onClick={() => {
+                setTimePeriod(day.day, day.setup);
+              }}
+            >
+              <h3>{day.setup.day}</h3>
+              <p>{day.day.toLocaleDateString()}</p>
+            </div>
+          ))}
+        <IconButton
+          name="arrow-right"
+          size="xxl"
+          disabled={week.length <= 0 || (week.length > 0 && week[week.length - 1].day >= new Date())}
+          onClick={() => {
+            const lastWeekDay = week[week.length - 1].day;
+            lastWeekDay.setDate(lastWeekDay.getDate() + 7);
+            refreshWeek(lastWeekDay);
+          }}
+        />
+      </div>
+    );
+  }
+
+  return render();
+
 };
 
 const getStyles = stylesFactory((theme: GrafanaTheme) => {
