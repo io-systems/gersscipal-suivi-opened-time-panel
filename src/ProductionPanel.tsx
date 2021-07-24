@@ -1,21 +1,27 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { dateTime, GrafanaTheme, PanelProps, TimeRange } from '@grafana/data';
-import { BackendSrv, getBackendSrv } from '@grafana/runtime';
 import { css, cx } from 'emotion';
 import { IconButton, stylesFactory, useTheme } from '@grafana/ui';
 
-import { DayValues, GspTimeRange, ProductionOptions, Setup } from 'types';
+import { GspTimeRange, ProductionOptions } from 'types';
 
 interface Props extends PanelProps<ProductionOptions> {}
+const WEEKDAYS = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
 
-export const ProductionPanel: React.FC<Props> = ({ options, timeRange, width, height, onChangeTimeRange }: Props) => {
+export const ProductionPanel: React.FC<Props> = ({
+  data,
+  options,
+  timeRange,
+  width,
+  height,
+  onChangeTimeRange,
+}: Props) => {
   const firstInit = useRef<boolean>(false);
-  const openingTimeSetup = useRef<Setup>();
+  const shiftSchedule = useRef<GspTimeRange[]>();
   const lastTimeRange = useRef<string>();
   const refreshInterval = useRef<NodeJS.Timeout>();
   const theme = useTheme();
   const styles = getStyles(theme);
-  const GspLoopback: BackendSrv = getBackendSrv();
   let validSetup = useRef(false);
   let [week, setWeek] = useState<any[]>([]);
   let [selectedDateInRange, setSelectedDateInRange] = useState<string>(new Date().toDateString());
@@ -25,26 +31,29 @@ export const ProductionPanel: React.FC<Props> = ({ options, timeRange, width, he
     return Number(tmp[0]) * 60 + Number(tmp[1]);
   };
 
-  const parseSetupPeriods = (day: Date, setup: DayValues): TimeRange => {
+  const parseSetupPeriods = (day: Date): TimeRange => {
     let parsedPeriodFrom = [0, 0]; // [ heures, minutes ]
     let parsedPeriodTo = [0, 0]; // [ heures, minutes ]
 
     // pas de période de production définie, abandon
-    if (setup.periods.length <= 0) {
+    if (!Array.isArray(shiftSchedule.current) || shiftSchedule.current.length < 0) {
       return timeRange;
     }
 
-    switch (setup.periods.length) {
+    switch (shiftSchedule.current.length) {
+      case 0:
+        return timeRange;
+
       case 1:
         // on ne traite qu'avec un seul index
-        parsedPeriodFrom = setup.periods[0].start.split(':').map((t: string) => Number(t));
-        parsedPeriodTo = setup.periods[0].end.split(':').map((t: string) => Number(t));
+        parsedPeriodFrom = shiftSchedule.current[0].start.split(':').map((t: string) => Number(t));
+        parsedPeriodTo = shiftSchedule.current[0].end.split(':').map((t: string) => Number(t));
         break;
 
       default:
         // on réalise une copie du tableau
         const tmp: GspTimeRange[] = [];
-        for (let p of setup.periods) {
+        for (let p of shiftSchedule.current) {
           tmp.push({ ...p });
         }
         // on trie du start le plus petit a start le plus grand et on ne conserve que le premier élément
@@ -62,15 +71,17 @@ export const ProductionPanel: React.FC<Props> = ({ options, timeRange, width, he
     const dayIsToday = from.toDateString() === now.toDateString();
     from.setHours(parsedPeriodFrom[0], parsedPeriodFrom[1], 0, 0);
     to.setHours(parsedPeriodTo[0], parsedPeriodTo[1], 0, 0);
-    if (dayIsToday && now.getTime() < to.getTime()) {
+    if (dayIsToday && now.getTime() < to.getTime() && now.getTime() > from.getTime()) {
       to.setHours(now.getHours(), now.getMinutes(), now.getSeconds(), 0);
     }
     return { from: dateTime(from), to: dateTime(to), raw: { from: from.toLocaleString(), to: to.toLocaleString() } };
   };
 
-  const setTimePeriod = (day: Date, setup: DayValues) => {
-    const { from, to } = parseSetupPeriods(day, setup);
+  const setTimePeriod = (day: Date) => {
+    const { from, to } = parseSetupPeriods(day);
     const newTimeRange = { from: from.valueOf(), to: to.valueOf() };
+    console.log(newTimeRange);
+    setSelectedDateInRange(timeRange.from.toDate().toDateString());
     if (JSON.stringify(newTimeRange) !== lastTimeRange.current) {
       onChangeTimeRange(newTimeRange);
       lastTimeRange.current = JSON.stringify(newTimeRange);
@@ -85,56 +96,78 @@ export const ProductionPanel: React.FC<Props> = ({ options, timeRange, width, he
     if (weekDayIndex < 0) {
       return;
     }
-    setTimePeriod(e, week[weekDayIndex].setup);
+    setTimePeriod(e);
   };
 
   const refreshWeek = (day: Date) => {
     // le paramètre day est toujours le dernier jour de la semaine
-    if (!openingTimeSetup.current) {
-      return;
-    }
-    const lastDay = day.getDay();
-    const openingTimeSetupLastIndex = openingTimeSetup.current.value.week.findIndex((d) => d.weekDay === lastDay);
-    if (openingTimeSetupLastIndex < 0) {
+    if (!shiftSchedule.current) {
       return;
     }
     let tmp: any[] = [];
     for (let i = 6; i >= 0; i--) {
       let d = new Date(day);
       d.setDate(day.getDate() - i);
-      const openingTimeSetupIndex = openingTimeSetup.current.value.week.findIndex((od) => od.weekDay === d.getDay());
       tmp.push({
         day: d,
-        setup: { ...openingTimeSetup.current.value.week[openingTimeSetupIndex] },
+        setup: {
+          day: WEEKDAYS[d.getDay()],
+          weekDay: d.getDay(),
+          periods: shiftSchedule.current,
+        },
       });
     }
     setWeek(tmp);
     if (!firstInit.current) {
       let e = new Date();
       const i = tmp.findIndex((day) => day.setup.weekDay === e.getDay());
-      if (i >= 0) {
-        setTimePeriod(tmp[i].day, tmp[i].setup);
+      if (i > -1) {
+        setTimePeriod(tmp[i].day);
       }
       firstInit.current = true;
     }
   };
 
-  useEffect(() => {
-    const url = [window.location.protocol, '//', window.location.hostname, ':', '3000'].join('');
-    GspLoopback.get(`${url}/app-setup/opening-time-setup`).then((data: Setup) => {
-      openingTimeSetup.current = data;
-      const setupError =
-        !data || !data.value || !data.value.week || !Array.isArray(data.value.week) || data.value.week.length <= 0;
-      validSetup.current = !setupError;
-      if (!validSetup.current) {
-        return;
-      }
+  const getShiftSchedule = () => {
+    console.log('getShiftSchedule');
+    if (data.state !== 'Done' || data.series.length <= 0) {
+      return;
+    }
+    const shiftSched = data.series.find((serie) => serie.refId === 'shiftSchedule');
+    if (!shiftSched) {
+      return;
+    }
+    if (!shiftSched.fields || shiftSched.fields.length < 0) {
+      return;
+    }
+    let tmpStart = shiftSched.fields.filter((field) => field.name === 'start');
+    if (tmpStart.length !== 1) {
+      return;
+    }
+    let tmpEnd = shiftSched.fields.filter((field) => field.name === 'end');
+    if (tmpEnd.length !== 1) {
+      return;
+    }
+    const tmpSched = {
+      start: tmpStart[0].values.toArray(),
+      end: tmpEnd[0].values.toArray(),
+    };
+    shiftSchedule.current = tmpSched.start.map((startval, i) => ({
+      start: tmpSched.start[i],
+      end: tmpSched.end[i],
+    }));
+    if (!week || week.length <= 0) {
       // get next sunday date (sunday.getDay() = 0)
       const nextSunday = new Date();
       nextSunday.setDate(nextSunday.getDate() + 7 - nextSunday.getDay());
       refreshWeek(nextSunday);
-    });
-  }, []);
+    }
+    validSetup.current = true;
+  };
+
+  useEffect(() => {
+    getShiftSchedule();
+  }, [data]);
 
   useEffect(() => {
     if (refreshInterval.current) {
@@ -149,8 +182,8 @@ export const ProductionPanel: React.FC<Props> = ({ options, timeRange, width, he
       }
     } else {
       console.log('not today');
+      setTimePeriod(timeRange.from.toDate());
     }
-    setSelectedDateInRange(timeRange.from.toDate().toDateString());
   }, [timeRange, options.autoRefresh, options.refreshSeconds]);
 
   const render = () => {
@@ -190,7 +223,7 @@ export const ProductionPanel: React.FC<Props> = ({ options, timeRange, width, he
                 `]: day.day.toDateString() === selectedDateInRange,
               })}
               onClick={() => {
-                setTimePeriod(day.day, day.setup);
+                setTimePeriod(day.day);
               }}
             >
               <h3>{day.setup.day}</h3>
