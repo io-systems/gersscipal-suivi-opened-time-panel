@@ -159,7 +159,9 @@ export const ProductionPanel: React.FC<Props> = ({
     if (!week || week.length <= 0) {
       // get next sunday date (sunday.getDay() = 0)
       const nextSunday = new Date();
-      nextSunday.setDate(nextSunday.getDate() + 7 - nextSunday.getDay());
+      if (nextSunday.getDay() !== 0) {
+        nextSunday.setDate(nextSunday.getDate() + 7 - nextSunday.getDay());
+      }
       refreshWeek(nextSunday);
     }
     validSetup.current = true;
