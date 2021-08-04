@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { dateTime, GrafanaTheme, PanelProps, TimeRange } from '@grafana/data';
-import { css, cx } from 'emotion';
-import { IconButton, stylesFactory, useTheme } from '@grafana/ui';
+import { dateTime, GrafanaTheme2, PanelProps, TimeRange } from '@grafana/data';
+import { css, cx } from '@emotion/css';
+import { IconButton, stylesFactory, useTheme2 } from '@grafana/ui';
 
 import { GspTimeRange, ProductionOptions } from 'types';
 
@@ -20,7 +20,7 @@ export const ProductionPanel: React.FC<Props> = ({
   const shiftSchedule = useRef<GspTimeRange[]>();
   const lastTimeRange = useRef<string>();
   const refreshInterval = useRef<NodeJS.Timeout>();
-  const theme = useTheme();
+  const theme = useTheme2();
   const styles = getStyles(theme);
   let validSetup = useRef(false);
   let [week, setWeek] = useState<any[]>([]);
@@ -167,6 +167,7 @@ export const ProductionPanel: React.FC<Props> = ({
 
   useEffect(() => {
     getShiftSchedule();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data]);
 
   useEffect(() => {
@@ -183,6 +184,7 @@ export const ProductionPanel: React.FC<Props> = ({
     } else {
       setTimePeriod(timeRange.from.toDate());
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [timeRange, options.autoRefresh, options.refreshSeconds]);
 
   const render = () => {
@@ -212,13 +214,13 @@ export const ProductionPanel: React.FC<Props> = ({
               key={day.day.toString()}
               className={cx(styles.cardContent, {
                 [css`
-                  border-bottom: 1px solid ${theme.palette.queryOrange};
+                  border-bottom: 1px solid ${theme.colors.warning.border};
                 `]: day.day.toDateString() === new Date().toDateString(),
                 [css`
                   display: none;
                 `]: day.setup.periods.length <= 0,
                 [css`
-                  border: 1px solid ${theme.palette.queryGreen};
+                  border: 1px solid ${theme.colors.primary.border};
                 `]: day.day.toDateString() === selectedDateInRange,
               })}
               onClick={() => {
@@ -246,7 +248,7 @@ export const ProductionPanel: React.FC<Props> = ({
   return render();
 };
 
-const getStyles = stylesFactory((theme: GrafanaTheme) => {
+const getStyles = stylesFactory((theme: GrafanaTheme2) => {
   return {
     wrapper: css`
       position: relative;
