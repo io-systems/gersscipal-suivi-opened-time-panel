@@ -80,7 +80,6 @@ export const ProductionPanel: React.FC<Props> = ({
   const setTimePeriod = (day: Date) => {
     const { from, to } = parseSetupPeriods(day);
     const newTimeRange = { from: from.valueOf(), to: to.valueOf() };
-    console.log(newTimeRange);
     setSelectedDateInRange(timeRange.from.toDate().toDateString());
     if (JSON.stringify(newTimeRange) !== lastTimeRange.current) {
       onChangeTimeRange(newTimeRange);
@@ -129,7 +128,6 @@ export const ProductionPanel: React.FC<Props> = ({
   };
 
   const getShiftSchedule = () => {
-    console.log('getShiftSchedule');
     if (data.state !== 'Done' || data.series.length <= 0) {
       return;
     }
@@ -183,7 +181,6 @@ export const ProductionPanel: React.FC<Props> = ({
         }, options.refreshSeconds * 1000);
       }
     } else {
-      console.log('not today');
       setTimePeriod(timeRange.from.toDate());
     }
   }, [timeRange, options.autoRefresh, options.refreshSeconds]);
